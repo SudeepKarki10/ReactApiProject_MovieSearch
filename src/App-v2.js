@@ -111,12 +111,15 @@ export default function App() {
 
   useEffect(
     function () {
+      const controller = new AbortController();
+
       async function fetchMovies() {
         try {
           setIsLoading(true);
           setError("");
           const res = await fetch(
-            `http://www.omdbapi.com/?apikey=${KEY}&s=${query}`
+            `http://www.omdbapi.com/?apikey=${KEY}&s=${query}`,
+            { signal: controller.signal }
           );
 
           if (!res.ok) {
@@ -129,10 +132,12 @@ export default function App() {
             throw new Error("Movie not founds"); //Error is name of error and Movie not found is the message
           }
           setMovies(data.Search);
-          console.log(data.Search);
+          setError("");
         } catch (err) {
           console.log(err.messge);
-          setError(err.message);
+          if (err.name !== "AbortError") {
+            setError(err.message);
+          }
         } finally {
           setIsLoading(false);
         }
@@ -142,8 +147,13 @@ export default function App() {
       //   setError("");
       //   return;
       // }
-
+      handleCloseMovie();
       fetchMovies();
+
+      //data cleanup in react using cleanup function
+      return function () {
+        controller.abort();
+      };
     },
     [query]
   );
@@ -176,7 +186,10 @@ export default function App() {
 
         <Box>
           {selectedId ? (
-            <MovieDetails selectedId={selectedId} onClick={handleCloseMovie} />
+            <MovieDetails
+              selectedId={selectedId}
+              onCloseMovie={handleCloseMovie}
+            />
           ) : (
             <>
               <WatchedSummary watched={watched} />
@@ -345,7 +358,7 @@ function WatchedSummary({ watched }) {
   );
 }
 
-function MovieDetails({ selectedId, onClick }) {
+function MovieDetails({ selectedId, onCloseMovie }) {
   const [movie, setMovie] = useState({});
 
   const {
@@ -377,10 +390,42 @@ function MovieDetails({ selectedId, onClick }) {
     },
     [selectedId]
   );
+
+  //
+  useEffect(
+    function () {
+      if (!title) return;
+      document.title = `Movie | ${title}`;
+
+      /*Cleanup function in React is the function which is used to manage the effect that remains even after it's effect have been unmounted */
+      return function () {
+        document.title = "usePopcorn";
+      };
+    },
+    [title]
+  );
+
+  useEffect(
+    function () {
+      function callback(e) {
+        if (e.code === "Escape") {
+          onCloseMovie();
+        }
+      }
+
+      document.addEventListener("keydown", callback);
+
+      return function () {
+        document.removeEventListener("keydown", callback);
+      };
+    },
+    [onCloseMovie]
+  );
+
   return (
     <div className="details">
       <header>
-        <button className="btn-back" onClick={onClick}>
+        <button className="btn-back" onClick={onCloseMovie}>
           &larr;
         </button>
         <img src={poster} alt="" />
